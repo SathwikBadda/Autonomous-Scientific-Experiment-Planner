@@ -1,0 +1,84 @@
+app:
+  name: "Autonomous Scientific Experiment Planner"
+  version: "1.0.0"
+  debug: true
+  log_level: "INFO"
+  log_dir: "logs"
+
+llm:
+  model: "claude-3-haiku-20240307"
+  max_tokens: 4096
+  temperature: 0.3
+  top_p: 0.9
+
+arxiv:
+  max_results: 10
+  min_results: 5
+  sort_by: "relevance"  # options: relevance, lastUpdatedDate, submittedDate
+  categories:
+    - "cs.AI"
+    - "cs.LG"
+    - "cs.CL"
+    - "stat.ML"
+
+rag:
+  embedding_model_path: "/Users/sathwikbadda/Autonomous-Scientific-Experiment-Planner/Sci_planner/rag/embedding_model/mixedbread-ai_mxbai-embed-large-v1"
+  embedding_dim: 1024
+  faiss_index_type: "FlatIP"   # FlatL2, FlatIP, IVFFlat
+  top_k: 5
+  chunk_size: 512
+  chunk_overlap: 64
+
+agents:
+  planner:
+    max_retries: 2
+    timeout: 60
+  retrieval:
+    max_retries: 3
+    timeout: 120
+    tool_choice: "auto"
+  paper_analyzer:
+    max_retries: 2
+    timeout: 90
+  gap_detection:
+    max_retries: 2
+    timeout: 90
+    min_gaps: 3
+  hypothesis_generator:
+    max_retries: 2
+    timeout: 90
+    min_hypotheses: 3
+  experiment_planner:
+    max_retries: 2
+    timeout: 120
+  dataset_recommender:
+    max_retries: 2
+    timeout: 60
+  critic:
+    max_retries: 3
+    timeout: 120
+    min_novelty_score: 5
+    min_feasibility_score: 4
+
+langfuse:
+  enabled: true
+  public_key: "YOUR_LANGFUSE_PUBLIC_KEY"
+  secret_key: "YOUR_LANGFUSE_SECRET_KEY"
+  host: "https://cloud.langfuse.com"
+  project_name: "autonomous-sci-planner"
+  flush_at: 15
+  flush_interval: 60
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  reload: true
+  cors_origins:
+    - "*"
+
+scoring:
+  novelty_weight: 0.4
+  feasibility_weight: 0.35
+  impact_weight: 0.25
+  min_composite_score: 5.0
