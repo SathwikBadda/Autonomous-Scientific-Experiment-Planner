@@ -143,6 +143,15 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+sci/
+
+
+#embeding model
+embedding_model/
+
+
+#secrets
+.env
 
 # Spyder project settings
 .spyderproject
