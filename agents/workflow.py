@@ -78,6 +78,10 @@ class PipelineState(TypedDict, total=False):
     overall_recommendation: str
     expected_outcomes: str
 
+    # PDF Project context
+    pdf_context: str
+    pdf_chunks: list[str]
+
     # Meta
     agent_trace: list[str]
     error: str | None
@@ -155,17 +159,47 @@ def build_graph(trace_holder: dict) -> StateGraph:
 # ─────────────────────────────────────────────
 # Public entry point
 # ─────────────────────────────────────────────
-def run_pipeline(research_input: Any) -> dict:
+def run_pipeline(research_input: Any, pdf_file_path: str | None = None) -> dict:
     """
     Execute the full multi-agent pipeline.
     Returns the final PipelineState as a plain dict.
     """
-    logger.info("pipeline_start", input=str(research_input)[:200])
+    from rag.pipeline import reset_index, index_chunks, search_pdf_chunks
+    from rag.document_loader import PDFLoader
+
+    logger.info("pipeline_start", input=str(research_input)[:200], pdf=pdf_file_path)
+
+    # Reset RAG index for a fresh run
+    reset_index()
+
+    pdf_chunks = []
+    pdf_context = ""
+
+    if pdf_file_path:
+        try:
+            # 1. Extract and chunk PDF
+            raw_text = PDFLoader.extract_text(pdf_file_path)
+            pdf_chunks = PDFLoader.chunk_text(raw_text)
+            
+            # 2. Index chunks in FAISS
+            index_chunks(pdf_chunks)
+            
+            # 3. Initial retrieval for context (using research_input as query)
+            query = research_input if isinstance(research_input, str) else research_input.get("task", "")
+            relevant_chunks = search_pdf_chunks(query, top_k=5)
+            from rag.pipeline import build_rag_context
+            pdf_context = build_rag_context(chunks=relevant_chunks)
+        except Exception as e:
+            logger.error("pdf_preprocessing_failed", error=str(e))
+            # Continue without PDF if it fails? Or exit? Let's continue with a warning in state.
 
     # Create Langfuse trace for the entire run
     trace = create_trace(
         name="sci_planner_pipeline",
-        metadata={"input": str(research_input)[:500]},
+        metadata={
+            "input": str(research_input)[:500],
+            "has_pdf": bool(pdf_file_path)
+        },
     )
     trace_holder = {"trace": trace}
 
@@ -174,6 +208,8 @@ def run_pipeline(research_input: Any) -> dict:
 
     initial_state: PipelineState = {
         "research_input": research_input,
+        "pdf_chunks": pdf_chunks,
+        "pdf_context": pdf_context,
         "agent_trace": [],
         "error": None,
         "trace_id": getattr(trace, "id", None),

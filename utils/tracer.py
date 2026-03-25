@@ -24,7 +24,14 @@ def get_langfuse():
         return _langfuse_client
 
     lf_cfg = config.get("langfuse", {})
-    if not lf_cfg.get("enabled", False):
+    enabled = lf_cfg.get("enabled", False)
+    
+    if not enabled:
+        logger.info("langfuse_disabled_in_config")
+        return None
+
+    if not lf_cfg.get("public_key") or "YOUR" in lf_cfg.get("public_key", ""):
+        logger.warning("langfuse_missing_public_key")
         return None
 
     try:
@@ -37,9 +44,9 @@ def get_langfuse():
             flush_at=lf_cfg.get("flush_at", 15),
             flush_interval=lf_cfg.get("flush_interval", 60),
         )
-        logger.info("langfuse_initialized", host=lf_cfg["host"])
+        logger.info("langfuse_initialized", host=lf_cfg["host"], public_key=lf_cfg["public_key"][:10] + "...")
     except Exception as e:
-        logger.warning("langfuse_init_failed", error=str(e))
+        logger.error("langfuse_init_failed", error=str(e))
         _langfuse_client = None
 
     return _langfuse_client

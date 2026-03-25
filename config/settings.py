@@ -24,13 +24,20 @@ def load_config() -> dict[str, Any]:
 
     # Override from environment
     cfg["llm"]["model"] = os.getenv("CLAUDE_MODEL", cfg["llm"]["model"])
+    
+    # Langfuse overrides
+    cfg["langfuse"]["enabled"] = os.getenv("LANGFUSE_ENABLED", str(cfg["langfuse"]["enabled"])).lower() == "true"
     cfg["langfuse"]["public_key"] = os.getenv(
         "LANGFUSE_PUBLIC_KEY", cfg["langfuse"]["public_key"]
     )
     cfg["langfuse"]["secret_key"] = os.getenv(
         "LANGFUSE_SECRET_KEY", cfg["langfuse"]["secret_key"]
     )
-    cfg["langfuse"]["host"] = os.getenv("LANGFUSE_HOST", cfg["langfuse"]["host"])
+    # Support both LANGFUSE_HOST and LANGFUSE_BASE_URL
+    cfg["langfuse"]["host"] = os.getenv(
+        "LANGFUSE_HOST", os.getenv("LANGFUSE_BASE_URL", cfg["langfuse"]["host"])
+    )
+    
     cfg["rag"]["embedding_model_path"] = os.getenv(
         "EMBEDDING_MODEL_PATH", cfg["rag"]["embedding_model_path"]
     )

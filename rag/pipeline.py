@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 _embedding_model = None
 _faiss_index = None
 _stored_papers: list[dict] = []
+_stored_chunks: list[str] = []  # Added for PDF RAG
 
 
 def _load_embedding_model():
@@ -64,10 +65,11 @@ def _get_faiss_index(dim: int):
 
 
 def reset_index():
-    """Clear the FAISS index and stored papers (call between pipeline runs)."""
-    global _faiss_index, _stored_papers
+    """Clear the FAISS index, stored papers, and chunks."""
+    global _faiss_index, _stored_papers, _stored_chunks
     _faiss_index = None
     _stored_papers = []
+    _stored_chunks = []
     logger.info("faiss_index_reset")
 
 
@@ -111,12 +113,41 @@ def index_papers(papers: list[dict]) -> int:
     return len(papers)
 
 
+def index_chunks(chunks: list[str]) -> int:
+    """
+    Embed text chunks and store in FAISS.
+    """
+    global _stored_chunks
+
+    if not chunks:
+        logger.warning("no_chunks_to_index")
+        return 0
+
+    model = _load_embedding_model()
+    dim = config["rag"]["embedding_dim"]
+    index = _get_faiss_index(dim)
+
+    logger.info("embedding_chunks", count=len(chunks))
+    embeddings = model.encode(
+        chunks,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+        batch_size=16,
+    )
+
+    embeddings = np.array(embeddings, dtype=np.float32)
+    index.add(embeddings)
+    _stored_chunks.extend(chunks)
+
+    logger.info("chunks_indexed", total_in_index=len(_stored_chunks))
+    return len(chunks)
+
+
 def search_similar_papers(query: str, top_k: int | None = None) -> list[dict]:
     """
     Given a query string, embed it and return top-k similar papers from FAISS.
     """
     if not _stored_papers:
-        logger.warning("faiss_index_empty")
         return []
 
     k = top_k or config["rag"]["top_k"]
@@ -144,18 +175,51 @@ def search_similar_papers(query: str, top_k: int | None = None) -> list[dict]:
     return results
 
 
-def build_rag_context(papers: list[dict], max_papers: int = 5) -> str:
+def search_pdf_chunks(query: str, top_k: int | None = None) -> list[str]:
     """
-    Format retrieved papers into a structured string for LLM context.
+    Retrieve top-k relevant chunks from FAISS.
+    """
+    if not _stored_chunks:
+        return []
+
+    k = top_k or config["rag"]["top_k"]
+    k = min(k, len(_stored_chunks))
+
+    model = _load_embedding_model()
+    index = _get_faiss_index(config["rag"]["embedding_dim"])
+
+    query_vec = model.encode([query], normalize_embeddings=True, show_progress_bar=False)
+    query_vec = np.array(query_vec, dtype=np.float32)
+
+    distances, indices = index.search(query_vec, k)
+    
+    results = []
+    for idx in indices[0]:
+        if 0 <= idx < len(_stored_chunks):
+            results.append(_stored_chunks[idx])
+    
+    return results
+
+
+def build_rag_context(papers: list[dict] = None, chunks: list[str] = None, max_items: int = 5) -> str:
+    """
+    Format retrieved papers and chunks into context string.
     """
     context_parts = []
-    for i, paper in enumerate(papers[:max_papers], 1):
-        score = paper.get("similarity_score", 0)
-        context_parts.append(
-            f"[Paper {i}] (relevance: {score:.3f})\n"
-            f"Title: {paper.get('title', 'N/A')}\n"
-            f"ArXiv ID: {paper.get('arxiv_id', 'N/A')}\n"
-            f"Published: {paper.get('published', 'N/A')}\n"
-            f"Abstract: {paper.get('abstract', 'N/A')[:800]}\n"
-        )
+    
+    if chunks:
+        context_parts.append("### EXTRACTED CONTEXT FROM UPLOADED PDF")
+        for i, chunk in enumerate(chunks[:max_items], 1):
+            context_parts.append(f"[PDF Chunk {i}]\n{chunk}\n")
+    
+    if papers:
+        context_parts.append("### RELEVANT LITERATURE (arXiv)")
+        for i, paper in enumerate(papers[:max_items], 1):
+            score = paper.get("similarity_score", 0)
+            context_parts.append(
+                f"[Paper {i}] (relevance: {score:.3f})\n"
+                f"Title: {paper.get('title', 'N/A')}\n"
+                f"Abstract: {paper.get('abstract', 'N/A')[:800]}\n"
+            )
+            
     return "\n---\n".join(context_parts)

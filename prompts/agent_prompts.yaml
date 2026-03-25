@@ -88,6 +88,9 @@ paper_analyzer_agent:
     Papers to Analyze:
     {papers}
 
+    Uploaded PDF Context (High Priority):
+    {pdf_context}
+
     Research Focus: {problem_statement}
 
     Produce a JSON analysis:
@@ -132,6 +135,7 @@ gap_detection_agent:
 
   user: |
     Paper Analyses: {paper_analyses}
+    Uploaded PDF Context: {pdf_context}
     Research Scope: {research_scope}
     Known Constraints: {constraints}
 

@@ -47,6 +47,7 @@ class PaperAnalyzerAgent(BaseAgent):
 
             user_prompt = self._get_user_prompt(
                 papers=papers_text,
+                pdf_context=state.get("pdf_context", ""),
                 problem_statement=problem_statement,
             )
 

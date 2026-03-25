@@ -40,6 +40,7 @@ class GapDetectionAgent(BaseAgent):
 
             user_prompt = self._get_user_prompt(
                 paper_analyses=json.dumps(paper_analyses, indent=2),
+                pdf_context=state.get("pdf_context", ""),
                 research_scope=json.dumps(research_scope, indent=2),
                 constraints=json.dumps(constraints),
             )
