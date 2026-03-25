@@ -1,15 +1,14 @@
 """
 utils/tracer.py - Langfuse integration for agent-level tracing.
-Every agent call is wrapped as a Langfuse span for full observability.
+Keys loaded directly from os.getenv() to avoid lru_cache stale reads.
 """
 from __future__ import annotations
 
-import functools
+import os
 import time
 from contextlib import contextmanager
-from typing import Any, Callable, Generator
+from typing import Any, Generator, Optional
 
-from config.settings import config
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,34 +16,66 @@ logger = get_logger(__name__)
 _langfuse_client = None
 
 
+def reset_langfuse():
+    """Force re-initialization (useful after env changes)."""
+    global _langfuse_client
+    _langfuse_client = None
+
+
 def get_langfuse():
-    """Lazy-init Langfuse client (only if enabled in config)."""
+    """
+    Lazy-init Langfuse client.
+    Reads keys DIRECTLY from os.getenv to bypass any lru_cache config stale reads.
+    """
     global _langfuse_client
     if _langfuse_client is not None:
         return _langfuse_client
 
-    lf_cfg = config.get("langfuse", {})
-    enabled = lf_cfg.get("enabled", False)
-    
+    # Read directly from env — bypasses any cached config
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY", "")
+    host = os.getenv("LANGFUSE_HOST") or os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+    enabled_str = os.getenv("LANGFUSE_ENABLED", "false").lower()
+    enabled = enabled_str in ("true", "1", "yes")
+
+    logger.info(
+        "langfuse_config_check",
+        enabled=enabled,
+        has_public_key=bool(public_key),
+        has_secret_key=bool(secret_key),
+        host=host,
+    )
+
     if not enabled:
-        logger.info("langfuse_disabled_in_config")
+        logger.info("langfuse_disabled_by_env")
         return None
 
-    if not lf_cfg.get("public_key") or "YOUR" in lf_cfg.get("public_key", ""):
-        logger.warning("langfuse_missing_public_key")
+    if not public_key or not secret_key:
+        logger.warning("langfuse_missing_keys", public_key_set=bool(public_key), secret_key_set=bool(secret_key))
+        return None
+
+    if "YOUR" in public_key or "YOUR" in secret_key:
+        logger.warning("langfuse_placeholder_keys_detected")
         return None
 
     try:
         from langfuse import Langfuse
 
         _langfuse_client = Langfuse(
-            public_key=lf_cfg["public_key"],
-            secret_key=lf_cfg["secret_key"],
-            host=lf_cfg["host"],
-            flush_at=lf_cfg.get("flush_at", 15),
-            flush_interval=lf_cfg.get("flush_interval", 60),
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host,
+            flush_at=15,
+            flush_interval=60,
         )
-        logger.info("langfuse_initialized", host=lf_cfg["host"], public_key=lf_cfg["public_key"][:10] + "...")
+        logger.info(
+            "langfuse_initialized_successfully",
+            host=host,
+            public_key_prefix=public_key[:12] + "...",
+        )
+        # Verify connectivity
+        _langfuse_client.auth_check()
+        logger.info("langfuse_auth_check_passed")
     except Exception as e:
         logger.error("langfuse_init_failed", error=str(e))
         _langfuse_client = None
@@ -54,53 +85,36 @@ def get_langfuse():
 
 class NoOpTrace:
     """Fallback when Langfuse is disabled or unavailable."""
-
     def __init__(self, *args, **kwargs):
         self.id = "no-op"
 
-    def span(self, *args, **kwargs):
-        return NoOpSpan()
-
-    def generation(self, *args, **kwargs):
-        return NoOpSpan()
-
-    def update(self, *args, **kwargs):
-        pass
-
-    def flush(self):
-        pass
+    def span(self, *args, **kwargs): return NoOpSpan()
+    def generation(self, *args, **kwargs): return NoOpSpan()
+    def update(self, *args, **kwargs): pass
+    def flush(self): pass
 
 
 class NoOpSpan:
     def __init__(self):
         self.id = "no-op"
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
-
-    def update(self, *args, **kwargs):
-        pass
-
-    def end(self, *args, **kwargs):
-        pass
-
-    def generation(self, *args, **kwargs):
-        return NoOpSpan()
-
-    def span(self, *args, **kwargs):
-        return NoOpSpan()
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+    def update(self, *args, **kwargs): pass
+    def end(self, *args, **kwargs): pass
+    def generation(self, *args, **kwargs): return NoOpSpan()
+    def span(self, *args, **kwargs): return NoOpSpan()
 
 
-def create_trace(name: str, metadata: dict | None = None):
+def create_trace(name: str, metadata: Optional[dict] = None):
     """Create a top-level Langfuse trace for a pipeline run."""
     lf = get_langfuse()
     if lf is None:
         return NoOpTrace()
     try:
-        return lf.trace(name=name, metadata=metadata or {})
+        trace = lf.trace(name=name, metadata=metadata or {})
+        logger.info("langfuse_trace_created", name=name, trace_id=getattr(trace, "id", "?"))
+        return trace
     except Exception as e:
         logger.warning("trace_creation_failed", error=str(e))
         return NoOpTrace()
@@ -111,7 +125,7 @@ def agent_span(
     trace,
     agent_name: str,
     input_data: Any = None,
-    metadata: dict | None = None,
+    metadata: Optional[dict] = None,
 ) -> Generator[Any, None, None]:
     """Context manager that wraps an agent call in a Langfuse span."""
     span = None
@@ -148,7 +162,7 @@ def log_llm_call(
     prompt: str,
     response: str,
     agent_name: str,
-    metadata: dict | None = None,
+    metadata: Optional[dict] = None,
 ):
     """Log an individual LLM call as a Langfuse generation."""
     try:
@@ -169,5 +183,6 @@ def flush_traces():
     if lf:
         try:
             lf.flush()
-        except Exception:
-            pass
+            logger.info("langfuse_traces_flushed")
+        except Exception as e:
+            logger.warning("langfuse_flush_failed", error=str(e))

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any
+from typing import Any, Optional
 
 import anthropic
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -56,11 +56,11 @@ class BaseAgent:
     def _call_llm(
         self,
         user_prompt: str,
-        system_prompt: str | None = None,
-        tools: list[dict] | None = None,
-        messages: list[dict] | None = None,
+        system_prompt: Optional[str] = None,
+        tools: Optional[list] = None,
+        messages: Optional[list] = None,
         trace=None,
-    ) -> anthropic.types.Message:
+    ) -> "anthropic.types.Message":
         """Call Claude API with optional tools and conversation history."""
         sys_prompt = system_prompt or self._get_system_prompt()
 

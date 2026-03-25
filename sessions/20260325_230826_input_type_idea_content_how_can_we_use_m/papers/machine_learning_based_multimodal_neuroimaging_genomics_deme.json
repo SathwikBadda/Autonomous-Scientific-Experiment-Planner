@@ -1,0 +1,24 @@
+{
+  "title": "Machine Learning Based Multimodal Neuroimaging Genomics Dementia Score for Predicting Future Conversion to Alzheimer's Disease",
+  "abstract": "Background: The increasing availability of databases containing both magnetic resonance imaging (MRI) and genetic data allows researchers to utilize multimodal data to better understand the characteristics of dementia of Alzheimer's type (DAT). Objective: The goal of this study was to develop and analyze novel biomarkers that can help predict the development and progression of DAT. Methods: We used feature selection and ensemble learning classifier to develop an image/genotype-based DAT score that represents a subject's likelihood of developing DAT in the future. Three feature types were used: MRI only, genetic only, and combined multimodal data. We used a novel data stratification method to better represent different stages of DAT. Using a pre-defined 0.5 threshold on DAT scores, we predicted whether or not a subject would develop DAT in the future. Results: Our results on Alzheimer's Disease Neuroimaging Initiative (ADNI) database showed that dementia scores using genetic data could better predict future DAT progression for currently normal control subjects (Accuracy=0.857) compared to MRI (Accuracy=0.143), while MRI can better characterize subjects with stable mild cognitive impairment (Accuracy=0.614) compared to genetics (Accuracy=0.356). Combining MRI and genetic data showed improved classification performance in the remaining stratified groups. Conclusion: MRI and genetic data can contribute to DAT prediction in different ways. MRI data reflects anatomical changes in the brain, while genetic data can detect the risk of DAT progression prior to the symptomatic onset. Combining information from multimodal data in the right way can improve prediction performance.",
+  "arxiv_id": "2203.05707v1",
+  "url": "http://arxiv.org/abs/2203.05707v1",
+  "pdf_url": "https://arxiv.org/pdf/2203.05707v1",
+  "authors": [
+    "Ghazal Mirabnahrazam",
+    "Da Ma",
+    "Sieun Lee",
+    "Karteek Popuri",
+    "Hyunwoo Lee"
+  ],
+  "published": "2022-03-11",
+  "year": "2022",
+  "categories": [
+    "cs.LG",
+    "cs.AI",
+    "eess.IV",
+    "q-bio.GN"
+  ],
+  "query_used": "multimodal learning alzheimer's disease detection",
+  "results": "arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website. Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them. Have an idea for a project that will add value for arXiv's community? Learn more about arXivLabs."
+}
